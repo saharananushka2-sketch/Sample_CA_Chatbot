@@ -7,7 +7,7 @@ st.set_page_config(page_title="Credit Chatbot", layout="centered")
 
 @st.cache_resource
 def load_model():
-    return pipeline("text2text-generation", model="google/flan-t5-small")
+    return pipeline("question-answering", model="deepset/tinyroberta-squad2")
 
 model = load_model()
 
@@ -17,9 +17,12 @@ def load_docs():
         try:
             reader = PdfReader(f)
             for page in reader.pages:
-                text += page.extract_text() or ""
+                t = page.extract_text()
+                if t:
+                    text += t
         except:
             pass
+
     for f in glob.glob("documents/*.txt"):
         try:
             with open(f, "r", encoding="utf-8") as file:
@@ -31,7 +34,7 @@ def load_docs():
 DOCS = load_docs()
 
 st.title("📊 Credit Analytics Chatbot")
-st.write("Ask questions based on your uploaded documents.")
+st.write("Ask questions based only on the uploaded documents.")
 
 if "chat" not in st.session_state:
     st.session_state.chat = []
@@ -45,8 +48,8 @@ if st.button("Ask"):
     if query.strip():
         st.session_state.chat.append(("You", query))
 
-        prompt = f"Context from documents:\n{DOCS}\n\nQuestion: {query}"
-        response = model(prompt, max_length=150)[0]["generated_text"]
+        answer = model(question=query, context=DOCS)
+        response = answer["answer"]
 
         st.session_state.chat.append(("Bot", response))
         st.experimental_rerun()
