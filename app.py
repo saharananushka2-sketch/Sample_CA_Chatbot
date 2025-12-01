@@ -5,6 +5,10 @@ import glob
 
 st.set_page_config(page_title="Credit Analytics LLM Assistant", layout="centered")
 
+# Secure: Pull API key from Streamlit secrets
+API_KEY = st.secrets["GROQ_API_KEY"]
+
+# Load documents
 def load_docs():
     text = ""
     for f in glob.glob("documents/*.pdf"):
@@ -28,29 +32,35 @@ def load_docs():
 
 DOCS = load_docs()
 
+# UI layout
 st.title("📊 Credit Analytics LLM Assistant")
-st.write("Ask questions using the power of Llama3 running on Groq.")
+st.write("Ask credit questions based on your uploaded documents.")
 
-api_key = st.text_input("Enter your Groq API Key", type="password")
+if "chat" not in st.session_state:
+    st.session_state.chat = []
 
-query = st.text_input("Your credit question:")
+# Print previous chat messages
+for role, msg in st.session_state.chat:
+    st.markdown(f"**{role}:** {msg}")
+
+query = st.text_input("Your question")
 
 if st.button("Ask"):
-    if not api_key:
-        st.error("Please enter your Groq API key.")
-    elif not query.strip():
-        st.error("Please enter a question.")
-    else:
-        client = Groq(api_key=api_key)
+    if query.strip():
+        st.session_state.chat.append(("You", query))
+
+        client = Groq(api_key=API_KEY)
 
         prompt = f"""
-        You are a Credit Analytics expert.
-        Use ONLY the following internal documents to answer:
+You are a Credit Analytics expert. 
+Use ONLY the following internal documents to answer the user's question.
 
-        {DOCS}
+DOCUMENTS:
+{DOCS}
 
-        QUESTION: {query}
-        """
+QUESTION:
+{query}
+"""
 
         response = client.chat.completions.create(
             model="llama3-8b-8192",
@@ -59,5 +69,5 @@ if st.button("Ask"):
         )
 
         answer = response.choices[0].message["content"]
-        st.subheader("Answer")
-        st.write(answer)
+        st.session_state.chat.append(("Bot", answer))
+        st.experimental_rerun()
