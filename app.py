@@ -1,66 +1,63 @@
 import streamlit as st
+from groq import Groq
 from pypdf import PdfReader
 import glob
-import re
 
-st.set_page_config(page_title="Credit Chatbot", layout="centered")
+st.set_page_config(page_title="Credit Analytics LLM Assistant", layout="centered")
 
-def load_documents():
-    text_blocks = []
-
+def load_docs():
+    text = ""
     for f in glob.glob("documents/*.pdf"):
         try:
             reader = PdfReader(f)
             for page in reader.pages:
-                txt = page.extract_text()
-                if txt:
-                    # split into paragraphs
-                    paragraphs = [p.strip() for p in txt.split("\n\n") if p.strip()]
-                    text_blocks.extend(paragraphs)
+                t = page.extract_text()
+                if t:
+                    text += t
         except:
             pass
 
     for f in glob.glob("documents/*.txt"):
         try:
             with open(f, "r", encoding="utf-8") as file:
-                paragraphs = [p.strip() for p in file.read().split("\n\n") if p.strip()]
-                text_blocks.extend(paragraphs)
+                text += file.read()
         except:
             pass
 
-    return text_blocks
+    return text
 
-@st.cache_data
-def get_docs():
-    return load_documents()
+DOCS = load_docs()
 
-DOCS = get_docs()
+st.title("📊 Credit Analytics LLM Assistant")
+st.write("Ask questions using the power of Llama3 running on Groq.")
 
-def find_best_answer(query):
-    query = query.lower()
-    best_score = 0
-    best_para = "Sorry, I couldn’t find relevant information in the documents."
+api_key = st.text_input("Enter your Groq API Key", type="password")
 
-    for para in DOCS:
-        words = re.findall(r"\w+", para.lower())
-        score = sum(1 for w in words if w in query)
+query = st.text_input("Your credit question:")
 
-        if score > best_score:
-            best_score = score
-            best_para = para
-
-    return best_para
-
-# UI
-st.title("📊 Credit Analytics Document Assistant")
-st.write("Ask questions based on the uploaded PDFs and text files.")
-
-query = st.text_input("Enter your question:")
-
-if st.button("Search"):
-    if not query.strip():
-        st.write("Please enter a question.")
+if st.button("Ask"):
+    if not api_key:
+        st.error("Please enter your Groq API key.")
+    elif not query.strip():
+        st.error("Please enter a question.")
     else:
-        answer = find_best_answer(query)
+        client = Groq(api_key=api_key)
+
+        prompt = f"""
+        You are a Credit Analytics expert.
+        Use ONLY the following internal documents to answer:
+
+        {DOCS}
+
+        QUESTION: {query}
+        """
+
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2
+        )
+
+        answer = response.choices[0].message["content"]
         st.subheader("Answer")
         st.write(answer)
